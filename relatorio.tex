@@ -1,0 +1,521 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage[portuges]{babel}
+\usepackage{graphicx}
+\usepackage[labelformat=empty]{caption}
+\usepackage{color}
+\usepackage[dvipsnames]{xcolor}
+\usepackage{float}
+\usepackage{textcomp}
+\usepackage{listings}
+
+\definecolor{solarized@base03}{HTML}{002B36}
+\definecolor{solarized@base02}{HTML}{073642}
+\definecolor{solarized@base01}{HTML}{586e75}
+\definecolor{solarized@base00}{HTML}{657b83}
+\definecolor{solarized@base0}{HTML}{839496}
+\definecolor{solarized@base1}{HTML}{93a1a1}
+\definecolor{solarized@base2}{HTML}{EEE8D5}
+\definecolor{solarized@base3}{HTML}{FDF6E3}
+\definecolor{solarized@yellow}{HTML}{B58900}
+\definecolor{solarized@orange}{HTML}{CB4B16}
+\definecolor{solarized@red}{HTML}{DC322F}
+\definecolor{solarized@magenta}{HTML}{D33682}
+\definecolor{solarized@violet}{HTML}{6C71C4}
+\definecolor{solarized@blue}{HTML}{268BD2}
+\definecolor{solarized@cyan}{HTML}{2AA198}
+\definecolor{solarized@green}{HTML}{859900}
+
+\lstset{
+  language=C,
+  upquote=true,
+  columns=fixed,
+  tabsize=2,
+  extendedchars=true,
+  breaklines=true,
+  numbers=left,
+  numbersep=5pt,
+  rulesepcolor=\color{solarized@base03},
+  numberstyle=\tiny\color{solarized@base01},
+  basicstyle=\footnotesize\ttfamily,
+  keywordstyle=\color{solarized@green},
+  stringstyle=\color{solarized@yellow}\ttfamily,
+  identifierstyle=\color{solarized@blue},
+  commentstyle=\color{solarized@base01},
+  emphstyle=\color{solarized@red}
+}
+
+\graphicspath{ {images/} }
+
+\title{\bf{\textcolor{Mahogany}{Relatório do Projeto em \emph{C}}}}
+\author{António Sérgio (a78296) \and Hugo Brandão (a78582) \and Tiago Alves (a78218) }
+\date{Abril 2017}
+
+\begin{document}
+\maketitle
+\begin{center}
+
+\par
+\large {Universidade do Minho}
+\par
+\large {Departamento de Informática}
+\par
+\large {Laboratórios de Informática 3}
+\vfill
+\bf Mestrado Integrado em Engenharia Informática
+\par
+\includegraphics[width=5cm]{UM}
+\end{center}
+
+\newpage
+
+\tableofcontents
+
+\newpage
+
+\section{Introdução}
+
+\par Este relatório aborda a resolução do projeto prático em C de LI3. O projeto consiste, resumidamente, em construir um sistema que permita analisar os artigos presentes em backups da Wikipedia, realizados em diferentes meses, e extrair informação útil para esse período de tempo como, por exemplo, o número de revisões, o número de novos artigos, entre outros.
+\par Para ajudar nesta tarefa, foi necessário fazer o \emph{parse} dos ficheiros e também criámos quatro módulos. Estes módulos são: o \emph{parse} dos ficheiros dados, as estruturas de dados,  código auxiliar para executar corretamente as queries fornecidas pelos professores, e um \emph{program} para teste.
+\par Depois dos ficheiros serem carregados, somos capazes de executar uma lista de queries disponibilizadas pela equipa docente. Para responder às diferentes queries utiliza-se as funções definidas nas API dos diferentes módulos já referidos.
+\par Ao longo deste relatório aborda-se assim as decisões tomadas na implementação do projeto, nomeadamente quais as estruturas utilizadas para criar cada um dos módulos, o porquê das escolhas feitas e as suas APIs.
+\par A secção final destina-se a anexos, isto é, excertos de código fundamental mas de demasiada dimensão, mas que apenas ajudam na melhor compreensão das soluções encontradas. O relatório em si, sem os anexos, possui toda a informação relevante, clara e independente da secção \emph{Anexos}.
+
+\newpage
+
+\section{Módulos}
+\par Nesta secção apresentam-se excertos do código comentados, bem como explicações das soluções usadas e os 3 grupos em que dividimos o projecto.
+
+\subsection{Estrutura de Dados (\emph{struct})}
+\par Para guardar toda a informação necessária lida a partir dos \emph{snapshots}, resolvemos usar duas \emph{hashtables}, umas para os artigos e outra para os contribuidores. Cada artigo tem a sua \emph{linked list} para as revisions.  Decidimos usar estes métodos pois, apesar de necessitar de mais instruções, a procura é muito rápida. A justificação para a \emph{linked list} é que tem uso e implementação simples, e também porque temos duas hash tables, logo não havia necessidade de outra implementação que fosse mais complicada de usar.
+
+\subsubsection{TCD\_istruct}
+\par A nossa TCD\_istruct tem quatro parâmetros, que são o hashsize, uma struct para os artigos, uma outra para os contribuidores e um inteiro \emph{occupied\_articles}.
+\par O inteiro \emph{hashsize} quase fala por si só, possui o tamanho das hashtables, já que este é calculado em função do número de artigos totais nos \emph{snapshots}.
+\par O inteiro \emph{occupied\_articles} possui o número de artigos únicos, ou o número de artigos ocupados, na hashtable dos \emph{articles}.
+
+\begin{lstlisting}
+typedef struct TCD_istruct{
+  int hashsize; //size of the hash tables (-1 if the hash tables have not been allocated)
+  Article *articles; //declaring a hash table for the articles called articles
+  Contributor *authors; //declaring a hash table for the contributors called author
+  int occupied_articles; //number of elements inside the articles's hash table
+}TCD_istruct;
+\end{lstlisting}
+
+\subsubsection{Article}
+ A \emph{articles struct} é uma hashtable criada para os artigos. Nesta, nós temos o número de contribuições de cada artigo, o seu id, uma lista ligada para as \emph{revisions}, e um inteiro "boolean" para referir se está ou não ocupado.
+
+\begin{lstlisting}
+typedef struct Article{
+  int nrevisions; //number of revisions of the article
+  struct RevisionList *revisions;
+  int isOccupied; // 0 is not occupied and 1 is occupied
+  int id; //the value of the id that was hashed -> -1 if it's empty
+}Article; //hence, an Article
+\end{lstlisting}
+
+\subsubsection{Revision}
+\par Cada Revision possui um id próprio, um título, data, o id do seu autor, o número de palavras e caracteres do texto e um apontador para a próxima revisão da \emph{linked list} do artigo.
+
+\begin{lstlisting}
+typedef struct RevisionList{
+  int id; //id of the revision
+  char *title; //title of the revision
+  char *date; //date of the creation of the revisions
+  int idcontributor; //id of the contributor that wrote the
+  int nwords; //number of words of the revision's article
+  int nchars; //number of characters of the revison's article
+  struct RevisionList *next; //pointer to the next element of the revision list
+}RevList; //pretty much connected lists (exactly that)
+\end{lstlisting}
+
+\subsubsection{Contribuitor}
+\par Por outro lado, a estrutura dos contribuidores segue o mesmo princípio que a dos artigos, mudando apenas a informação guardada. Cada contribuidor possui um id, um nome e a quantidade de contribuições por esse autor.
+
+\begin{lstlisting}
+typedef struct Contributor{
+  int id; //id of the contributor
+  char name[256]; //name of the contributor
+  int ncontributions; //number of contributions of this author
+  int isOccupied; //0 is not occupied and 1 is occupied
+}Contributor; //hence, a block called Contributor;
+\end{lstlisting}
+
+\clearpage
+
+\subsection{Parse}
+\quad Esta secção descreve como foi feita uma das partes fundamentais do projeto, o parse. Para isto, usamos funções já fornecidas pela biblioteca \emph{libxml2}.
+\par É também nesta parte que a estrutura é iniciada em função do número total de artigos e os dados são carregados para a estrutura, logo é compreensível que seja uma query mais demorada.
+\par Visto que lidamos com uma grande quantidade de informação foi necessário utilizar várias funções já incluidas na biblioteca \emph{libxml2} para anular a memory leak.
+
+\subsubsection{ParseDoc}
+\par É nesta função que verificamos se o ficheiro fornecido é de \emph{xml} e se está vazio antes de fazer o processamento da informação. Caso não seja de xml ou esteja vazio, a função termina e retorna um erro, caso contrário, um \emph{xmlNodePtr} é enviado para a \emph{ParseDocID} onde iremos processar a informação.
+
+\begin{lstlisting}
+if (doc == NULL ) {
+    fprintf(stderr,"Document not parsed successfully. \n");
+    return 0;
+  }
+
+  cur = xmlDocGetRootElement(doc);
+
+  if (cur == NULL) {
+    fprintf(stderr,"empty document\n");
+    return 0;
+  }
+\end{lstlisting}
+
+\subsubsection{ParseDocID}
+\par \emph{ParseDocID } é a maior função do nosso projeto e é onde toda a informação é processada e guardada na nossa struct.
+\par Nesta função recorremos a \emph{while}s para procurar os nodos que queremos obter para, seguidamente, encontrar a informação necessária.
+
+\begin{lstlisting}
+while(aux!=NULL){
+        if(!(xmlStrcmp(aux->name, (const xmlChar *) "title"))){
+          con = (char*) xmlNodeGetContent(aux);
+        }
+\end{lstlisting}
+
+
+\par Como se pode ver no pedaço de código acima apresentado, percorremos um \emph{while} até encontrar um nodo com um certo nome (naquele caso é "title") e quando esse for encontrado guardamos a informação nele contida numa variável, após acabar uma página inserimos toda a informação sobre essa na struct com a função insertID.
+
+\begin{lstlisting}
+      insertID(id, revisionid, usernameid, con, username, t, text, qs);
+      xmlFree(text);
+\end{lstlisting}
+
+\par Nesta função foi necessário fazer vários \emph{free}s, caso contrário obtinhamos grandes quantidades de memory leak.
+
+\subsubsection{ParseCount}
+\par Como é nesta secção que a struct é iniciada foi necessário criar uma função que contasse o número de pages, ou seja, o número total de artigos para que podessemos alocar uma certa quantidade de memória para a nossa struct. Essa função é a \emph{ParseCount}.
+\par Esta função basicamente é uma junção da \emph{ParseDoc} com a \emph{ParseDocID}, ou seja, verifica se o ficheiro fornecido é de \emph{xml} e se está ou não vazio, caso esteja tudo bem esta conta o número total de page nodes.
+
+\begin{lstlisting}
+while (aux != NULL ){
+    if(!(xmlStrcmp(aux->name, (const xmlChar *) "page"))) p++;//everytime there is a page node the p variable is incremented
+    aux = aux->next;
+  }
+\end{lstlisting}
+
+\subsection{Queries}
+\par Nesta secção fazemos menção ao modo como decidimos executar as queries fornecidas e de que maneira chegamos ao resultado esperado pelo grupo e pela equipa docente. Por ocuparem demasiado espaço, o código referente a cada query está na sua completude na secção referente aos anexos.
+
+\subsubsection{Init}
+\par A query init não faz, na prática, nada útil. Decidimos alocar memória para a estrutura em função do número total de artigos, para não ter de realocar a hastable no caso de haver mais elementos para inserir do que espaços na hashtable. A verdadeira inicialização é feita no \emph{load} onde existe uma função \emph{init2}. Ver Init em \ref{Init}.
+
+\subsubsection{Load}
+\par Esta query possui a maior carga de trabalho do programa. É chamada a função parse e consequentemente o carregamento de dados para a estrutura. Foi decisão do grupo amortizar o máximo possível em load, já que não nos foi fornecido o número de queries que seriam executadas ao correr o programa. Amortizando em load, dependemos apenas do número de snapshots passados como argumento, já que as queries são quase instantâneas. Numa análise assimptótica, o programa corre em $\theta(nsnaps, nqueries) = \theta(N, 1).$ Isto permite que um grande número de queries seja executada em tempo constante. Ver Load em \ref{Load}.
+
+\subsubsection{All Articles}
+\par Dadas as nossas estrututas de dados, para calcular o número total de artigos basta devolver o tamanho da nossa hashtable(\emph{qs->hashsize}. (Retornamos metade da hashsize, porque no parse aumentamos o tamanho da hashtable para o dobro, por segurança.) Ver All\_Articles em \ref{All Articles}
+
+\subsubsection{Unique Articles}
+\par Para os artigos únicos, nós temos um inteiro na nossa estrutura de dados que nos devolve o número de posições da hashtable dos artigos ocupadas, ou seja, o número de artigos únicos. Ver Unique\_Articles em \ref{Unique Articles}.
+
+\subsubsection{All Revisions}
+\par Na estrutura dos artigos, temos um inteiro para cada aritgo que nos diz o número de revisiões que cada um tem. Para calcular o número total de revisões, percorremos todos os artigos e somamos o \emph{nrevisions} de cada artigo. Ver All\_Revisions em \ref{All Revisions}.
+
+\subsubsection{Top 10 Contributors}
+\par Para executar esta query, criámos um array(além do final), de 10 posições, para guardar as dez maiores contribuições. Este array é-nos muito útil, porque à medida que vamos percorrendo a hashtable dos contribuidores, comparamos o \emph{ncontributions} de cada contribuidor com o número de contribuições presentes em cada posição no array, inserindo na posição que satisfaça a condição de ordenação e inserção, aplicada pela função auxiliar \emph{inserts}. \par Fazendo isto para toda a estrutura dos contribuidores, executámos com sucesso a query pretendida. Ver Top\_10\_Contributors em \ref{Top10}.
+
+\subsubsection{Contributor Name}
+\par Fazendo o hash do id dado, isto é, calculando o resto da divisão do id pelo \emph{hashsize}, o resultado é a posição da hashtable dos contribuidores em que pode estar o id pretendido. Caso não encontre, procuramos na próxima e assim sucessivamente até encontrar o id. Uma vez encontrado, guardamos o nome do contribuidor na variável \emph{name}(encapsulamento), e retornamos esta mesma. Ver Contributor\_Name em \ref{Contributor Name}.
+
+\subsubsection{Top 20 Largest Articles}
+\par Nesta query criámos um array auxiliar (além do final com os id's) com 20 posições, para guardar o número de carateres. O passo seguinte foi percorrer toda a hashtable, e guardar o número de carateres de cada artigo, mas na sua versão mais recente, isto é, na \emph{revision} mais recente. Uma vez guardado o número de carateres atualizado, fomos comparando com os números presentes, e quando o nosso guardado \emph{nc}(número de carateres) fosse maior do que aquele no array, ou se o nc fosse igual mas o correspondente id fosse menor do que aquele no array final, inseriámos, invocando a nossa função auxiliar \emph{insertArticleId}, o id na posição em que a comparação deu true. Depois disto, inserimos também o nc na mesma posição mas no array dos números de carateres. \par O nosso método de inserção e ordenação consistia em começar na última posição do array, e ir colocando o valor anterior na posição em que estamos, por exemplo, arr[9] = arr[8], arr[8] = arr[7], e assim sucessivamente, até chegarmos à posição em que o id tinha que ser inserido. Quando atingida a posição, inseríamo-lo e terminava a função. \par Realizando isto para todos os artigos, obtivemos os 20 maiores.
+\par Ver Top\_20\_Largest\_Articles em \ref{Top20}.
+
+\subsubsection{Article Title}
+\par Nesta query, dado o id do artigo e as nossas estruturas de dados, o trabalho ficou facilitado. Fazendo o hash desse id, obtemos a posição da hashtable dos artigos, a partir da qual começámos a procurar esse id. Quando encontrado, o passo seguinte foi aceder à revisão mais recente, para consequentemente, obter o título mais recente. Para isto, e para garantir encapsulamento, criámos uma variável \emph{timestamp}, onde guardamos a data de uma revisão, e outra chamada \emph{title}, para guardar o título dessa mesma revisão. Através de um ciclo, percorremos todas as revisões do artigo e guardámos a data e o título mais atuais, chegando assim ao resultado esperado. Ver Article\_Title em \ref{Article Title}.
+
+\subsubsection{Top N Articles With More Words}
+\par Assim como realizámos as queries top\_10\_contributors e top\_20\_largest\_articles, do mesmo modo realizamos esta. Comparando com esta segunda, as diferenças estão apenas no tamanho dos arrays \emph{top\_N} e \emph{numberOfWords}, que são de N posições os dois; a variável para guardar o número de palavras de cada artigo chama-se \emph{nw}, em vez de nc. O percorrer da hashtable, a atualização do nw, a inserção e ordenação dos arrays é feita exatamente da mesma forma que as duas queries acima mencionadas. Ver Top\_N\_Articles\_With\_More\_Words em \ref{TopN}.
+
+\subsubsection{Titles With Prefix}
+\par Na resolução desta query, como não sabemos quantos títulos têm o prefixo, criámos o array \emph{final} com tamanho 1, e sempre que fossemos encontrando títulos para inserir, incrementávamos o tamanho(\emph{size}). O passo seguinte foi, logicamente, percorrer a nossa hashtable e verificar para cada artigo, se o correspondente título possuía o dado prefixo, considerando a atualização das revisões.  Já com os dados atualizados, verificámos se o \emph{prefix} era mesmo um prefixo do título, e se fosse, incrementávamos o tamanho do array,  inseríamos o título, e incrementávamos também o \emph{inserted}(esta última variável dá-nos o número de títulos inseridos).  A razão de primeiramente incrementar o tamanho e só depois inserir o título é porque, desta forma, temos sempre a última posição do array em branco, que servirá para inserir o \emph{NULL}.
+\par Por último, e executando tudo o descrito acima para todos os artigos, faltava apenas ordenar o array. Para isto, usámos a função já pré-definida \emph{qsort}, devolvendo o o array final bem sucedido. Ver Titles\_With\_Prefix em \ref{Titles}.
+
+\subsubsection{Article Timestamp}
+\par O primeiro passo a realizar foi calcular o \emph{hash} do id do artigo passado como argumento. O resultado deste cálculo dá-nos a posição da hashtable a partir do qual começámos a procurar o id, podendo não encontrar logo à primeira, devido às colisões. Seguidamente, encontrado o id, acedemos à nossa lista ligada das revisions, e percorremos a lista até encontrar o id pedido. Quando encontrado, temos uma variável \emph{timestamp} que guarda a data dessa revision, e retornamo-la, garantindo encapsulamento.Ver Article\_Timestamp em \ref{Article Timestamp}.
+
+\subsubsection{Clean}
+\par A gestão de memória foi sempre uma preocupação do grupo, causando com que procurássemos uma ferramenta para a verificação de memory leaks e se efetivamente havia perda de memória ao finalizar a execução do programa. A ferramenta que mais objetivamente nos fornecia a informação que precisávamos é o \emph{valgrind}. Esta ferramenta com o comando \emph{"valgrind --leak-check=yes ./program args"} fornece o sumário da heap à saída do programa.
+\par A \emph{clean} em si percorre ambas \emph{hashtables} oa mesmo tempo, já que possuem o mesmo tamanho. Para cada artigo, se está ocupado, libertam-se as revisões uma a uma. No fim libertam-se ambas \emph{hashtables} e a TCD\_istruct em si. Ver Clean. \ref{Clean}.
+
+\newpage
+
+\section{Conclusão}
+\par Em suma, é opinião do grupo que concluimos o projeto com sucesso. Através do parse dos ficheiros xml conseguimos extrair toda a informação relevante para o projeto, de uma maneira otimizada, passando esta para uma estrutura de dados pensada e feita por nós na totalidade. Tínhamos como objetivo criar uma estrutura simples mas eficaz, e observando os resultados, cremos que atingimos esse objetivo.
+
+\begin{center}
+\vfill
+\bf Mestrado Integrado em Engenharia Informática
+\par
+\includegraphics[width=5cm]{UM}
+\end{center}
+
+\newpage
+
+\section{Anexos}
+
+\begin{lstlisting}
+void parse(int nsnaps, char **snaps_paths, TAD_istruct qs) {
+  int i, size = 0;
+  if (nsnaps <= 0) {
+    printf("Usage: ./program docname\n");
+    return;
+  }
+
+  xmlDocPtr doc[nsnaps];
+#pragma omp parallel for num_threads(8) ordered schedule(dynamic)
+  for(i=0; i<nsnaps; i++){
+    doc[i] = xmlParseFile(snaps_paths[i]);
+    size+=parseCount(doc[i]);
+  }
+
+
+  size = (size *2);
+  qs->hashsize = size;
+  qs->articles = malloc(size*sizeof(Article));
+  qs->authors = malloc(size*sizeof(Contributor));
+  qs = init2(qs);
+
+  for(i=0; i<nsnaps; i++){
+    parseDoc(doc[i], qs);
+    xmlFreeDoc(doc[i]);
+  }
+
+  xmlCleanupParser();
+}
+
+\end{lstlisting}
+
+\subsection{Init} \label{Init}
+
+\begin{lstlisting}
+TAD_istruct init(){
+  TAD_istruct qs = (TAD_istruct) malloc(sizeof(TCD_istruct));
+  qs->occupied_articles = 0;
+  qs->hashsize = -1;
+  return qs;
+}
+\end{lstlisting}
+
+\subsection{Load} \label{Load}
+
+\begin{lstlisting}
+TAD_istruct load(TAD_istruct qs, int nsnaps, char* snaps_paths[]){
+  parse(nsnaps, snaps_paths, qs);
+  return qs;
+}
+\end{lstlisting}
+
+\subsection{All\_Articles} \label{All Articles}
+
+\begin{lstlisting}
+long all_articles(TAD_istruct qs){
+  return (long) (qs->hashsize)/2;
+}
+\end{lstlisting}
+
+\subsection{Unique\_Articles}  \label{Unique Articles}
+
+\begin{lstlisting}
+long unique_articles(TAD_istruct qs){
+  return (long) qs->occupied_articles;//occupied_articles is the number of unique id's inside the hash table.
+}
+\end{lstlisting}
+
+\subsection{All\_Revisions} \label{All Revisions}
+
+\begin{lstlisting}
+long all_revisions(TAD_istruct qs){
+  int i;
+  long l=0;
+  //runs through all the revisions inside the hash table and as long as doesn't finish, increase the l variable.
+  for(i=0; i<qs->hashsize; i++) l += qs->articles[i].nrevisions;
+  return l;
+}
+\end{lstlisting}
+
+\subsection{Top\_10\_Contributors} \label{Top10}
+
+\begin{lstlisting}
+long* top_10_contributors(TAD_istruct qs){
+  int i, flag;
+  int contributions[10] = {-1};//creates an array with the top ten contributions.
+  long *top_ten = malloc(10*sizeof(long));//creates the final array.
+  for(i=0; i<qs->hashsize; i++){
+    flag = 0;
+    if(qs->authors[i].isOccupied){
+      inserts(qs->authors[i].id, qs->authors[i].ncontributions, contributions, top_ten, 10, flag);
+    }
+  }
+  return top_ten;
+}
+
+\end{lstlisting}
+
+\subsection{Contributor\_Name} \label{Contributor Name}
+
+\begin{lstlisting}
+char* contributor_name(long contributor_id, TAD_istruct qs){
+  int i = hash(contributor_id, qs);
+  int found = 0;
+  char *name;//final pointer to the contributor name.
+  while(qs->authors[i].isOccupied && !found){//runs through all the author's block inside the hash table.
+      if(qs->authors[i].id == contributor_id) {//check if the given id equals to the present idcontributor.
+        found = 1;
+        name = strdup(qs->authors[i].name);//saves the author's name.
+      }
+      i++;
+  }
+  if(!found) return NULL;
+  return name;
+}
+\end{lstlisting}
+
+\clearpage
+
+\subsection{Top\_20\_Largest\_Articles} \label{Top20}
+
+\begin{lstlisting}
+long* top_20_largest_articles(TAD_istruct qs){
+  long *top_twenty = malloc(20*sizeof(long));
+  int i, flag, nc;
+  int numberOfChars[20] = {-1};
+  RevList* aux;
+  for(i=0; i<qs->hashsize; i++){
+    flag = 0;
+    if(qs->articles[i].revisions){
+      nc = qs->articles[i].revisions->nchars;
+      aux = qs->articles[i].revisions->next;
+      while(aux){
+        if(nc < aux->nchars) nc = aux->nchars;
+        aux = aux->next;
+      }
+      inserts(qs->articles[i].id, nc, numberOfChars, top_twenty, 20, flag);
+    }
+  }
+  return top_twenty;
+}
+\end{lstlisting}
+\subsection{Article\_Title} \label{Article Title}
+
+\begin{lstlisting}
+char* article_title(long article_id, TAD_istruct qs){
+  char *title, *timestamp;
+  int i = hash(article_id, qs), flag = 0;
+  RevList *aux;
+  while (qs->articles[i].isOccupied && !flag){//runs through all the author's block inside the hash table.
+    if(qs->articles[i].id == article_id){//checks if the given id equals to the present article's id.
+      flag = 1;
+      timestamp = qs->articles[i].revisions->date;//saves the date.
+      aux = qs->articles[i].revisions;
+      title = strdup(mostRecentTitle(aux, timestamp, title));
+    }
+    i++;
+  }
+  return title;
+}
+\end{lstlisting}
+
+\newpage
+
+\subsection{Top\_N\_Articles\_With\_More\_Words} \label{TopN}
+
+\begin{lstlisting}
+long* top_N_articles_with_more_words(int n, TAD_istruct qs){
+  long* top_N = malloc(n*sizeof(long));
+  int i, l, flag, nw;
+  int numberOfWords[n];
+  RevList *aux;
+  for(l=0; l<n; l++) numberOfWords[l] = -1;
+  for(l=0; l<n; l++) top_N[l] = 9999999;
+  for(i=0; i<qs->hashsize; i++){
+    flag=0;
+    if(qs->articles[i].revisions){
+      nw = qs->articles[i].revisions->nwords;
+      aux = qs->articles[i].revisions->next;
+      while(aux){
+        if(nw < aux->nwords) nw = aux->nwords;
+        aux = aux->next;
+      }
+      inserts(qs->articles[i].id, nw, numberOfWords, top_N, n, flag);
+  }
+}
+  return top_N;
+}
+\end{lstlisting}
+
+\subsection{Titles\_With\_Prefix} \label{Titles}
+
+\begin{lstlisting}
+char** titles_with_prefix(char* prefix, TAD_istruct qs){
+  int i, inserted=0, size = 1, length = strlen(prefix);
+  char** final = (char**) malloc(size*sizeof(char*));//the final pointer that the function will return.
+  char *timestamp, *title;//timestamp will point to the date, title to the article's title.
+  RevList* aux;
+  for(i=0; i<qs->hashsize; i++){
+    if(qs->articles[i].revisions){//it only checks the title and inserts it if there are revisions.
+      timestamp = qs->articles[i].revisions->date;
+      aux = qs->articles[i].revisions;
+      title = mostRecentTitle(aux, timestamp, title);//'title' saves the most recent title;
+      if(!strncmp(prefix, title, length)){
+        final = realloc(final, size*sizeof(char*)+sizeof(char*));//increases the final's size.
+        size = size + 1;
+        final[inserted++] = strdup(title);
+      }
+    }
+  }
+  final[inserted] = NULL;
+  for(i=0;final[i];i++);
+  qsort(final, i, sizeof(char*), cstring_cmp);
+  return final;
+}
+\end{lstlisting}
+
+\clearpage
+
+\subsection{Article\_Timestamp} \label{Article Timestamp}
+
+\begin{lstlisting}
+char* article_timestamp(long article_id, long revision_id, TAD_istruct qs){
+  int i, flag=0;//'i' variable is to run through the hash table. The flag is to get out of the for cycle without a break.
+  char *timestamp;
+  RevList *aux;
+  i = hash(article_id, qs);
+  while(qs->articles[i].isOccupied && !flag){
+    if(article_id == qs->articles[i].id){//first we search for the article's id.
+      aux = qs->articles[i].revisions;
+      for(; aux && !flag; aux = aux->next){
+        if(revision_id == aux->id){//searches for the revision's id. If it finds it, then we point the timestamp to the date.
+          timestamp = strdup(aux->date);
+          flag = 1;
+        }
+      }
+    }
+    i++;
+  }
+  return timestamp;
+}
+\end{lstlisting}
+
+\subsection{Clean} \label{Clean}
+
+\begin{lstlisting}
+TAD_istruct clean(TAD_istruct qs){
+  int i;
+  for(i=0; i< qs->hashsize; i++){
+    if(qs->articles[i].revisions)
+      freeREV(qs->articles[i].revisions);
+  }
+  free(qs->articles);
+  free(qs->authors);
+  free(qs);
+  return qs;
+}
+\end{lstlisting}
+
+\end{document}
